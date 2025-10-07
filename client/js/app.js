@@ -12,6 +12,12 @@ class SyncWave {
         this.selectedFileIndex = -1; // Currently selected file index
         this.syncOffset = 0; // Sync offset in seconds
         
+        // Subtitle properties
+        this.fileSubtitles = {}; // Store parsed subtitles by file index
+        this.subtitleDisplay = null; // Subtitle display element
+        this.subtitleText = null; // Subtitle text element
+        this.subtitleInterval = null; // Subtitle tracking interval
+        
         this.initializeElements();
         this.setupEventListeners();
         this.connectSocket();
@@ -72,6 +78,10 @@ class SyncWave {
         this.syncOffsetMinus = document.getElementById('syncOffsetMinus');
         this.syncOffsetPlus = document.getElementById('syncOffsetPlus');
         this.syncOffsetDisplay = document.getElementById('syncOffsetDisplay');
+        
+        // Subtitle elements
+        this.subtitleDisplay = document.getElementById('subtitleDisplay');
+        this.subtitleText = document.getElementById('subtitleText');
     }
 
     setupEventListeners() {
@@ -422,6 +432,50 @@ class SyncWave {
                 this.updateRoomInfo(roomId, response.roomState.memberCount);
                 this.updateStatus(`Joined room ${roomId} as ${this.isHost ? 'host' : 'member'}`);
                 
+                // Process existing files in the room
+                if (response.roomState.playlist && response.roomState.playlist.length > 0) {
+                    console.log('Received existing files from room:', response.roomState.playlist);
+                    this.files = response.roomState.playlist;
+                    this.updateFileCards();
+                }
+                
+                // Process existing download sources
+                if (response.roomState.downloadSources && Object.keys(response.roomState.downloadSources).length > 0) {
+                    console.log('Received existing download sources:', response.roomState.downloadSources);
+                    Object.keys(response.roomState.downloadSources).forEach(fileIndex => {
+                        const input = this.fileCards.querySelector(`.download-source-input[data-file-index="${fileIndex}"]`);
+                        if (input) {
+                            input.value = response.roomState.downloadSources[fileIndex];
+                        }
+                    });
+                }
+                
+                // Process existing torrent files
+                if (response.roomState.torrentFiles && Object.keys(response.roomState.torrentFiles).length > 0) {
+                    console.log('Received existing torrent files:', response.roomState.torrentFiles);
+                    Object.keys(response.roomState.torrentFiles).forEach(fileIndex => {
+                        const torrentData = response.roomState.torrentFiles[fileIndex];
+                        const div = this.fileCards.querySelector(`.torrent-download[data-file-index="${fileIndex}"]`);
+                        if (div && torrentData.torrentData) {
+                            // Convert base64 to binary
+                            const binaryString = atob(torrentData.torrentData.split(',')[1]); // Remove data:application/x-bittorrent;base64, prefix
+                            const bytes = new Uint8Array(binaryString.length);
+                            for (let i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+                            
+                            // Create download link
+                            const blob = new Blob([bytes], { type: 'application/x-bittorrent' });
+                            const url = URL.createObjectURL(blob);
+                            div.innerHTML = `
+                                <a href="${url}" download="${torrentData.torrentFileName}" class="torrent-download-link">
+                                    📥 Download ${torrentData.torrentFileName}
+                                </a>
+                            `;
+                        }
+                    });
+                }
+                
                 // Update URL without page reload
                 window.history.pushState({}, '', `/room/${roomId}`);
             } else {
@@ -493,8 +547,41 @@ class SyncWave {
         this.updateFileCards();
     }
 
+    updateDownloadSource(fileIndex, downloadSource) {
+        console.log('Updating download source for file', fileIndex, ':', downloadSource);
+        const input = this.fileCards.querySelector(`.download-source-input[data-file-index="${fileIndex}"]`);
+        if (input) {
+            input.value = downloadSource;
+        }
+    }
+
+    updateTorrentFile(fileIndex, torrentData, torrentFileName) {
+        console.log('Updating torrent file for file', fileIndex, ':', torrentFileName);
+        const div = this.fileCards.querySelector(`.torrent-download[data-file-index="${fileIndex}"]`);
+        if (div && torrentData) {
+            // Convert base64 to binary
+            const binaryString = atob(torrentData.split(',')[1]); // Remove data:application/x-bittorrent;base64, prefix
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            // Create download link
+            const blob = new Blob([bytes], { type: 'application/x-bittorrent' });
+            const url = URL.createObjectURL(blob);
+            div.innerHTML = `
+                <a href="${url}" download="${torrentFileName}" class="torrent-download-link">
+                    📥 Download ${torrentFileName}
+                </a>
+            `;
+        }
+    }
+
     updateFileCards() {
         console.log('Updating file cards, files count:', this.files.length);
+        
+        // Preserve existing data before regenerating cards
+        const preservedData = this.preserveFileCardData();
         
         if (this.files.length === 0) {
             this.fileCards.innerHTML = `
@@ -557,6 +644,16 @@ class SyncWave {
                                 <div class="torrent-download" data-file-index="${index}"></div>
                             </div>
                         </div>
+                        
+                        <!-- Subtitle upload section -->
+                        <div class="subtitle-upload">
+                            <label>Upload Subtitle:</label>
+                            <div class="subtitle-upload-controls">
+                                <input type="file" class="subtitle-file-input" accept=".srt,.vtt,.ass,.ssa" data-file-index="${index}" style="display: none;">
+                                <button class="upload-subtitle-btn" data-file-index="${index}">Choose Subtitle File</button>
+                                <div class="subtitle-info" data-file-index="${index}"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -564,6 +661,9 @@ class SyncWave {
 
         this.fileCards.innerHTML = cardsHTML;
         this.fileCount.textContent = `${this.files.length} file${this.files.length !== 1 ? 's' : ''}`;
+
+        // Restore preserved data
+        this.restoreFileCardData(preservedData);
 
         // Add click listeners
         this.fileCards.querySelectorAll('.file-card').forEach(card => {
@@ -637,6 +737,28 @@ class SyncWave {
                         });
                     };
                     reader.readAsDataURL(file);
+                }
+            });
+        });
+
+        // Subtitle upload event listeners
+        this.fileCards.querySelectorAll('.upload-subtitle-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fileIndex = parseInt(e.target.dataset.fileIndex);
+                const subtitleInput = this.fileCards.querySelector(`.subtitle-file-input[data-file-index="${fileIndex}"]`);
+                subtitleInput.click();
+            });
+        });
+
+        this.fileCards.querySelectorAll('.subtitle-file-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const fileIndex = parseInt(e.target.dataset.fileIndex);
+                const file = e.target.files[0];
+                
+                if (file) {
+                    console.log('Subtitle file selected for file', fileIndex, ':', file.name);
+                    this.handleSubtitleUpload(fileIndex, file);
                 }
             });
         });
@@ -734,6 +856,9 @@ class SyncWave {
         this.videoElement.play().catch(e => console.warn('Play failed:', e));
         this.isPlaying = true;
         this.updatePlayPauseButton();
+        
+        // Start subtitle tracking
+        this.startSubtitleTracking();
     }
 
     syncPause(data) {
@@ -795,6 +920,9 @@ class SyncWave {
         this.updateVideoInfo(file);
         this.updateFileCards();
         this.hideVideoOverlay();
+        
+        // Start subtitle tracking for the new video
+        this.startSubtitleTracking();
     }
 
     updatePlayPauseButton() {
@@ -1043,6 +1171,308 @@ class SyncWave {
 
     updateSyncOffsetDisplay() {
         this.syncOffsetDisplay.textContent = `${this.syncOffset > 0 ? '+' : ''}${this.syncOffset.toFixed(1)}s`;
+    }
+
+    // File card data preservation methods
+    preserveFileCardData() {
+        const preservedData = {
+            downloadSources: {},
+            torrentFiles: {},
+            subtitleFiles: {}
+        };
+
+        // Preserve download sources
+        this.fileCards.querySelectorAll('.download-source-input').forEach(input => {
+            const fileIndex = parseInt(input.dataset.fileIndex);
+            if (input.value.trim()) {
+                preservedData.downloadSources[fileIndex] = input.value;
+            }
+        });
+
+        // Preserve torrent files
+        this.fileCards.querySelectorAll('.torrent-download').forEach(div => {
+            const fileIndex = parseInt(div.dataset.fileIndex);
+            if (div.innerHTML.trim()) {
+                preservedData.torrentFiles[fileIndex] = div.innerHTML;
+            }
+        });
+
+        // Preserve subtitle files
+        this.fileCards.querySelectorAll('.upload-subtitle-btn').forEach(btn => {
+            const fileIndex = parseInt(btn.dataset.fileIndex);
+            if (btn.textContent !== 'Choose Subtitle File' && btn.textContent.includes('📄')) {
+                preservedData.subtitleFiles[fileIndex] = {
+                    text: btn.textContent,
+                    style: btn.style.cssText
+                };
+            }
+        });
+
+        return preservedData;
+    }
+
+    restoreFileCardData(preservedData) {
+        // Restore download sources
+        Object.keys(preservedData.downloadSources).forEach(fileIndex => {
+            const input = this.fileCards.querySelector(`.download-source-input[data-file-index="${fileIndex}"]`);
+            if (input) {
+                input.value = preservedData.downloadSources[fileIndex];
+            }
+        });
+
+        // Restore torrent files
+        Object.keys(preservedData.torrentFiles).forEach(fileIndex => {
+            const div = this.fileCards.querySelector(`.torrent-download[data-file-index="${fileIndex}"]`);
+            if (div) {
+                div.innerHTML = preservedData.torrentFiles[fileIndex];
+            }
+        });
+
+        // Restore subtitle files
+        Object.keys(preservedData.subtitleFiles).forEach(fileIndex => {
+            const btn = this.fileCards.querySelector(`.upload-subtitle-btn[data-file-index="${fileIndex}"]`);
+            if (btn) {
+                btn.textContent = preservedData.subtitleFiles[fileIndex].text;
+                btn.style.cssText = preservedData.subtitleFiles[fileIndex].style;
+            }
+        });
+    }
+
+    // Subtitle methods
+    handleSubtitleUpload(fileIndex, file) {
+        console.log('Handling subtitle upload for file', fileIndex, ':', file.name);
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target.result;
+            console.log('Subtitle file content loaded, parsing...');
+            
+            // Parse subtitle file based on extension
+            const subtitles = this.parseSubtitleFile(content, file.name);
+            if (subtitles && subtitles.length > 0) {
+                this.fileSubtitles[fileIndex] = subtitles;
+                console.log('Parsed', subtitles.length, 'subtitle entries for file', fileIndex);
+                
+                // Update the subtitle button to show filename
+                const btn = this.fileCards.querySelector(`.upload-subtitle-btn[data-file-index="${fileIndex}"]`);
+                if (btn) {
+                    // Truncate filename if too long to keep it on one line
+                    const maxLength = 25;
+                    const displayName = file.name.length > maxLength 
+                        ? file.name.substring(0, maxLength) + '...' 
+                        : file.name;
+                    btn.textContent = `📄 ${displayName}`;
+                    btn.style.background = 'linear-gradient(135deg, #4CAF50, #45a049)';
+                    btn.style.color = 'white';
+                    btn.style.whiteSpace = 'nowrap';
+                    btn.style.overflow = 'hidden';
+                    btn.style.textOverflow = 'ellipsis';
+                }
+                
+                // Update subtitle info
+                const info = this.fileCards.querySelector(`.subtitle-info[data-file-index="${fileIndex}"]`);
+                if (info) {
+                    info.innerHTML = `<small>Subtitle loaded: ${subtitles.length} entries</small>`;
+                }
+                
+                this.updateStatus(`Subtitle loaded for ${this.files[fileIndex].name}: ${subtitles.length} entries`);
+                
+                // Start subtitle tracking if this is the current file
+                if (fileIndex === this.currentFileIndex) {
+                    this.startSubtitleTracking();
+                }
+            } else {
+                this.updateStatus('Failed to parse subtitle file');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    parseSubtitleFile(content, filename) {
+        const extension = filename.toLowerCase().split('.').pop();
+        console.log('Parsing subtitle file with extension:', extension);
+        
+        switch (extension) {
+            case 'srt':
+                return this.parseSRT(content);
+            case 'vtt':
+                return this.parseVTT(content);
+            case 'ass':
+            case 'ssa':
+                return this.parseASS(content);
+            default:
+                console.warn('Unsupported subtitle format:', extension);
+                return null;
+        }
+    }
+
+    parseSRT(content) {
+        const subtitles = [];
+        const blocks = content.trim().split(/\n\s*\n/);
+        
+        for (const block of blocks) {
+            const lines = block.trim().split('\n');
+            if (lines.length >= 3) {
+                const index = parseInt(lines[0]);
+                const timeMatch = lines[1].match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+                
+                if (timeMatch) {
+                    const startTime = this.parseSRTTime(timeMatch[1], timeMatch[2], timeMatch[3], timeMatch[4]);
+                    const endTime = this.parseSRTTime(timeMatch[5], timeMatch[6], timeMatch[7], timeMatch[8]);
+                    const text = lines.slice(2).join('\n').replace(/<[^>]*>/g, ''); // Remove HTML tags
+                    
+                    subtitles.push({
+                        start: startTime,
+                        end: endTime,
+                        text: text
+                    });
+                }
+            }
+        }
+        
+        return subtitles.sort((a, b) => a.start - b.start);
+    }
+
+    parseSRTTime(hours, minutes, seconds, milliseconds) {
+        return parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseInt(seconds) + parseInt(milliseconds) / 1000;
+    }
+
+    parseVTT(content) {
+        const subtitles = [];
+        const lines = content.split('\n');
+        let currentSubtitle = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (line.includes('-->')) {
+                const timeMatch = line.match(/(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
+                if (timeMatch) {
+                    const startTime = this.parseVTTTime(timeMatch[1], timeMatch[2], timeMatch[3], timeMatch[4]);
+                    const endTime = this.parseVTTTime(timeMatch[5], timeMatch[6], timeMatch[7], timeMatch[8]);
+                    
+                    currentSubtitle = {
+                        start: startTime,
+                        end: endTime,
+                        text: ''
+                    };
+                }
+            } else if (currentSubtitle && line && !line.includes('WEBVTT')) {
+                currentSubtitle.text += (currentSubtitle.text ? '\n' : '') + line.replace(/<[^>]*>/g, '');
+            } else if (currentSubtitle && !line) {
+                if (currentSubtitle.text) {
+                    subtitles.push(currentSubtitle);
+                }
+                currentSubtitle = null;
+            }
+        }
+        
+        if (currentSubtitle && currentSubtitle.text) {
+            subtitles.push(currentSubtitle);
+        }
+        
+        return subtitles.sort((a, b) => a.start - b.start);
+    }
+
+    parseVTTTime(hours, minutes, seconds, milliseconds) {
+        return parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseInt(seconds) + parseInt(milliseconds) / 1000;
+    }
+
+    parseASS(content) {
+        // Basic ASS/SSA parser - simplified version
+        const subtitles = [];
+        const lines = content.split('\n');
+        
+        for (const line of lines) {
+            if (line.startsWith('Dialogue:')) {
+                const parts = line.split(',');
+                if (parts.length >= 10) {
+                    const startTime = this.parseASSTime(parts[1]);
+                    const endTime = this.parseASSTime(parts[2]);
+                    const text = parts.slice(9).join(',').replace(/\\N/g, '\n').replace(/<[^>]*>/g, '');
+                    
+                    if (text.trim()) {
+                        subtitles.push({
+                            start: startTime,
+                            end: endTime,
+                            text: text.trim()
+                        });
+                    }
+                }
+            }
+        }
+        
+        return subtitles.sort((a, b) => a.start - b.start);
+    }
+
+    parseASSTime(timeStr) {
+        const parts = timeStr.split(':');
+        if (parts.length === 3) {
+            const hours = parseInt(parts[0]);
+            const minutes = parseInt(parts[1]);
+            const seconds = parseFloat(parts[2]);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+        return 0;
+    }
+
+    startSubtitleTracking() {
+        console.log('Starting subtitle tracking for file', this.currentFileIndex);
+        
+        // Clear existing interval
+        if (this.subtitleInterval) {
+            clearInterval(this.subtitleInterval);
+        }
+        
+        // Start tracking
+        this.subtitleInterval = setInterval(() => {
+            this.updateSubtitleDisplay();
+        }, 100); // Update every 100ms for smooth display
+    }
+
+    stopSubtitleTracking() {
+        console.log('Stopping subtitle tracking');
+        if (this.subtitleInterval) {
+            clearInterval(this.subtitleInterval);
+            this.subtitleInterval = null;
+        }
+        this.hideSubtitle();
+    }
+
+    updateSubtitleDisplay() {
+        if (!this.videoElement || !this.subtitleDisplay || !this.subtitleText) return;
+        
+        const currentTime = this.videoElement.currentTime;
+        const subtitles = this.fileSubtitles[this.currentFileIndex];
+        
+        if (!subtitles || subtitles.length === 0) {
+            this.hideSubtitle();
+            return;
+        }
+        
+        // Find current subtitle
+        const currentSubtitle = subtitles.find(sub => 
+            currentTime >= sub.start && currentTime <= sub.end
+        );
+        
+        if (currentSubtitle) {
+            this.showSubtitle(currentSubtitle.text);
+        } else {
+            this.hideSubtitle();
+        }
+    }
+
+    showSubtitle(text) {
+        if (this.subtitleText) {
+            this.subtitleText.textContent = text;
+            this.subtitleDisplay.style.display = 'block';
+        }
+    }
+
+    hideSubtitle() {
+        if (this.subtitleDisplay) {
+            this.subtitleDisplay.style.display = 'none';
+        }
     }
 }
 

@@ -42,6 +42,8 @@ class SyncRoom {
     this.syncDelay = 500; // 500ms sync delay
     this.lastAction = null;
     this.actionTimestamp = null;
+    this.downloadSources = new Map(); // Store download sources by file index
+    this.torrentFiles = new Map(); // Store torrent files by file index
   }
 
   addMember(socketId, isHost = false) {
@@ -111,7 +113,9 @@ class SyncRoom {
       playlist: this.playlist,
       currentIndex: this.currentIndex,
       currentVideoName: this.currentVideoName,
-      currentFileName: this.currentFileName
+      currentFileName: this.currentFileName,
+      downloadSources: Object.fromEntries(this.downloadSources),
+      torrentFiles: Object.fromEntries(this.torrentFiles)
     };
   }
 }
@@ -344,6 +348,48 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  // Download source update handler
+  socket.on('update-download-source', (data) => {
+    if (!socket.roomId) return;
+
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+
+    console.log(`Download source updated for file ${data.fileIndex}:`, data.downloadSource);
+    
+    // Store download source in room
+    room.downloadSources.set(data.fileIndex, data.downloadSource);
+    
+    // Broadcast to all clients in the room
+    socket.to(socket.roomId).emit('download-source-updated', {
+      fileIndex: data.fileIndex,
+      downloadSource: data.downloadSource
+    });
+  });
+
+  // Torrent file upload handler
+  socket.on('upload-torrent', (data) => {
+    if (!socket.roomId) return;
+
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+
+    console.log(`Torrent file uploaded for file ${data.fileIndex}:`, data.torrentFileName);
+    
+    // Store torrent file in room
+    room.torrentFiles.set(data.fileIndex, {
+      torrentData: data.torrentData,
+      torrentFileName: data.torrentFileName
+    });
+    
+    // Broadcast to all clients in the room
+    socket.to(socket.roomId).emit('torrent-uploaded', {
+      fileIndex: data.fileIndex,
+      torrentData: data.torrentData,
+      torrentFileName: data.torrentFileName
+    });
+  });
 });
 
 // Routes
@@ -367,7 +413,13 @@ app.get('/api/rooms', (req, res) => {
   res.json(roomList);
 });
 
-server.listen(PORT, () => {
-  console.log(`🎵 SyncWave server running on port ${PORT}`);
-  console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
-});
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  server.listen(PORT, () => {
+    console.log(`🎵 SyncWave server running on port ${PORT}`);
+    console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
