@@ -10,10 +10,12 @@ class SyncWave {
         this.isSyncing = false;
         this.localFiles = new Map(); // Store local file URLs by filename
         this.selectedFileIndex = -1; // Currently selected file index
+        this.syncOffset = 0; // Sync offset in seconds
         
         this.initializeElements();
         this.setupEventListeners();
         this.connectSocket();
+        this.updateSyncOffsetDisplay();
     }
 
     initializeElements() {
@@ -65,6 +67,11 @@ class SyncWave {
         this.currentRoomId = document.getElementById('currentRoomId');
         this.memberCount = document.getElementById('memberCount');
         this.hostIndicator = document.getElementById('hostIndicator');
+
+        // Sync offset elements
+        this.syncOffsetMinus = document.getElementById('syncOffsetMinus');
+        this.syncOffsetPlus = document.getElementById('syncOffsetPlus');
+        this.syncOffsetDisplay = document.getElementById('syncOffsetDisplay');
     }
 
     setupEventListeners() {
@@ -117,6 +124,10 @@ class SyncWave {
         // Fullscreen button
         this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
         
+        // Sync offset controls
+        this.syncOffsetMinus.addEventListener('click', () => this.adjustSyncOffset(-0.5));
+        this.syncOffsetPlus.addEventListener('click', () => this.adjustSyncOffset(0.5));
+        
         // Video element events
         this.videoElement.addEventListener('loadedmetadata', () => this.updateVideoInfo());
         this.videoElement.addEventListener('timeupdate', () => this.updateProgress());
@@ -136,6 +147,10 @@ class SyncWave {
         // Create bound functions to ensure proper cleanup
         const boundHandleProgressDrag = this.handleProgressDrag.bind(this);
         const boundMouseMoveHandler = (e) => boundHandleProgressDrag(e, true);
+        const boundTouchMoveHandler = (e) => {
+            e.preventDefault();
+            boundHandleProgressDrag(e.touches[0], true);
+        };
         
         const startDragging = (e) => {
             isDragging = true;
@@ -145,26 +160,64 @@ class SyncWave {
             e.preventDefault();
         };
         
+        const startTouchDragging = (e) => {
+            isDragging = true;
+            this.handleProgressDrag(e.touches[0], true); // Pass true to indicate dragging
+            document.addEventListener('touchmove', boundTouchMoveHandler, { passive: false });
+            document.addEventListener('touchend', stopDragging);
+            e.preventDefault();
+        };
+        
         const stopDragging = () => {
             isDragging = false;
             document.removeEventListener('mousemove', boundMouseMoveHandler);
             document.removeEventListener('mouseup', stopDragging);
+            document.removeEventListener('touchmove', boundTouchMoveHandler);
+            document.removeEventListener('touchend', stopDragging);
         };
         
-        // Click and drag events
+        // Mouse events for desktop
         progressBarContainer.addEventListener('mousedown', startDragging);
         progressBarContainer.addEventListener('click', (e) => {
             if (!isDragging) {
                 this.handleProgressDrag(e, false); // Pass false to indicate click
             }
         });
+        
+        // Touch events for mobile
+        progressBarContainer.addEventListener('touchstart', startTouchDragging, { passive: false });
+        progressBarContainer.addEventListener('touchend', (e) => {
+            if (!isDragging) {
+                e.preventDefault();
+                this.handleProgressDrag(e.changedTouches[0], false); // Pass false to indicate tap
+            }
+        });
+        
+        // Prevent default touch behaviors that might interfere
+        progressBarContainer.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
     }
     
     handleProgressDrag(event, isDragging = false) {
         if (this.currentFileIndex === -1 || !this.videoElement.duration || this.isSyncing) return;
         
         const rect = this.progressBar.parentElement.getBoundingClientRect();
-        const percent = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        
+        // Handle both mouse and touch events
+        let clientX;
+        if (event.touches && event.touches[0]) {
+            // Touch event
+            clientX = event.touches[0].clientX;
+        } else if (event.changedTouches && event.changedTouches[0]) {
+            // Touch end event
+            clientX = event.changedTouches[0].clientX;
+        } else {
+            // Mouse event
+            clientX = event.clientX;
+        }
+        
+        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         const time = percent * this.videoElement.duration;
         
         // Update UI immediately for responsiveness
@@ -172,14 +225,25 @@ class SyncWave {
         this.progressHandle.style.left = `${percent * 100}%`;
         this.currentTime.textContent = this.formatTime(time);
         
-        // Only send seek command if we're actually dragging or clicking
+        // Only send seek command if we're actually dragging or clicking/tapping
         // This prevents unnecessary seeks when just moving the mouse
-        if (isDragging || event.type === 'click') {
-            this.socket.emit('playback-control', {
-                action: 'seek',
-                videoIndex: this.currentFileIndex,
-                time: time
-            });
+        if (isDragging || event.type === 'click' || event.type === 'touchend') {
+            // Add a small delay for mobile to ensure smooth seeking
+            if (event.type === 'touchend') {
+                setTimeout(() => {
+                    this.socket.emit('playback-control', {
+                        action: 'seek',
+                        videoIndex: this.currentFileIndex,
+                        time: time + this.syncOffset
+                    });
+                }, 50);
+            } else {
+                this.socket.emit('playback-control', {
+                    action: 'seek',
+                    videoIndex: this.currentFileIndex,
+                    time: time + this.syncOffset
+                });
+            }
         }
     }
     
@@ -255,7 +319,7 @@ class SyncWave {
         this.socket.emit('playback-control', {
             action: 'seek',
             videoIndex: this.currentFileIndex,
-            time: newTime
+            time: newTime + this.syncOffset
         });
     }
     
@@ -268,7 +332,7 @@ class SyncWave {
         this.socket.emit('playback-control', {
             action: 'seek',
             videoIndex: this.currentFileIndex,
-            time: newTime
+            time: newTime + this.syncOffset
         });
     }
 
@@ -323,7 +387,7 @@ class SyncWave {
             this.socket.emit('playback-control', {
                 action: action,
                 videoIndex: this.currentFileIndex,
-                time: this.videoElement.currentTime
+                time: this.videoElement.currentTime + this.syncOffset
             });
         });
         
@@ -664,7 +728,9 @@ class SyncWave {
             this.loadLocalVideo(data.videoIndex);
         }
         
-        this.videoElement.currentTime = data.time || 0;
+        // Apply sync offset to the received time
+        const adjustedTime = Math.max(0, (data.time || 0) - this.syncOffset);
+        this.videoElement.currentTime = adjustedTime;
         this.videoElement.play().catch(e => console.warn('Play failed:', e));
         this.isPlaying = true;
         this.updatePlayPauseButton();
@@ -675,7 +741,9 @@ class SyncWave {
             this.loadLocalVideo(data.videoIndex);
         }
         
-        this.videoElement.currentTime = data.time || 0;
+        // Apply sync offset to the received time
+        const adjustedTime = Math.max(0, (data.time || 0) - this.syncOffset);
+        this.videoElement.currentTime = adjustedTime;
         this.videoElement.pause();
         this.isPlaying = false;
         this.updatePlayPauseButton();
@@ -686,7 +754,9 @@ class SyncWave {
             this.loadLocalVideo(data.videoIndex);
         }
         
-        this.videoElement.currentTime = data.time;
+        // Apply sync offset to the received time
+        const adjustedTime = Math.max(0, data.time - this.syncOffset);
+        this.videoElement.currentTime = adjustedTime;
     }
 
     syncLoadVideo(data) {
@@ -960,6 +1030,19 @@ class SyncWave {
     showError(message) {
         console.error('Error:', message);
         this.updateStatus(`Error: ${message}`);
+    }
+
+    // Sync offset methods
+    adjustSyncOffset(amount) {
+        this.syncOffset += amount;
+        // Clamp between -10 and 10 seconds
+        this.syncOffset = Math.max(-10, Math.min(10, this.syncOffset));
+        this.updateSyncOffsetDisplay();
+        this.updateStatus(`Sync offset: ${this.syncOffset > 0 ? '+' : ''}${this.syncOffset.toFixed(1)}s`);
+    }
+
+    updateSyncOffsetDisplay() {
+        this.syncOffsetDisplay.textContent = `${this.syncOffset > 0 ? '+' : ''}${this.syncOffset.toFixed(1)}s`;
     }
 }
 
