@@ -371,3 +371,5 @@ server.listen(PORT, () => {
   console.log(`🎵 SyncWave server running on port ${PORT}`);
   console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
 });
+
+module.exports = app;
