@@ -20,7 +20,7 @@ SyncWave is a modern, real-time media synchronization application that allows mu
 - **Smooth Animations**: Polished transitions and hover effects
 - **Intuitive Controls**: Familiar media player interface
 
-### 🎵 Music Management
+### Video Management
 - **Local File Support**: Upload and sync your own music files
 - **Playlist Management**: Create and manage synchronized playlists
 - **Track Information**: Display track names, artists, and duration
@@ -213,19 +213,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - Check internet connection stability
 - Ensure all members are in the same room
 
-### Getting Help
-- **Issues**: [GitHub Issues](https://github.com/yourrepo/syncwave/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourrepo/syncwave/discussions)
-
 ## 🙏 Acknowledgments
-
-- **Spotify** for design inspiration
-- **Socket.IO** team for excellent real-time communication tools
-- **Express.js** community for the robust web framework
-- **Contributors** who help make SyncWave better
-
----
-
-**Made with ❤️ for music lovers everywhere**
+itzMRZ for vibe and the code
 
 *Sync your vibe, share the moment* 🎵

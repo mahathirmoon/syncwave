@@ -9,7 +9,7 @@ class SyncWave {
         this.isPlaying = false;
         this.isSyncing = false;
         this.localFiles = new Map(); // Store local file URLs by filename
-        this.syncOffset = 0; // Sync offset in seconds
+        this.selectedFileIndex = -1; // Currently selected file index
         
         this.initializeElements();
         this.setupEventListeners();
@@ -26,6 +26,8 @@ class SyncWave {
         this.shareRoomBtn = document.getElementById('shareRoomBtn');
         this.shareModal = document.getElementById('shareModal');
         this.closeShareModal = document.getElementById('closeShareModal');
+        this.shareCode = document.getElementById('shareCode');
+        this.copyCodeBtn = document.getElementById('copyCodeBtn');
         this.shareLink = document.getElementById('shareLink');
         this.copyLinkBtn = document.getElementById('copyLinkBtn');
 
@@ -45,32 +47,6 @@ class SyncWave {
         this.totalTime = document.getElementById('totalTime');
         this.volumeSlider = document.getElementById('volumeSlider');
         this.fullscreenBtn = document.getElementById('fullscreenBtn');
-        
-        // Sync offset elements
-        this.syncOffsetMinus = document.getElementById('syncOffsetMinus');
-        this.syncOffsetPlus = document.getElementById('syncOffsetPlus');
-        this.syncOffsetDisplay = document.getElementById('syncOffsetDisplay');
-        
-        // Seeking popup elements
-        this.seekingPopup = document.getElementById('seekingPopup');
-        this.seekingTime = document.getElementById('seekingTime');
-        this.seekingPreview = document.getElementById('seekingPreview');
-        
-        // File selection modal elements
-        this.fileSelectionModal = document.getElementById('fileSelectionModal');
-        this.closeFileSelectionModal = document.getElementById('closeFileSelectionModal');
-        this.fileSelectionOptions = document.getElementById('fileSelectionOptions');
-        
-        // Sync selection modal elements
-        this.syncSelectionModal = document.getElementById('syncSelectionModal');
-        this.closeSyncSelectionModal = document.getElementById('closeSyncSelectionModal');
-        this.syncFileOptions = document.getElementById('syncFileOptions');
-        this.startSyncBtn = document.getElementById('startSyncBtn');
-        this.syncStatus = document.getElementById('syncStatus');
-        
-        // Share modal elements
-        this.shareCode = document.getElementById('shareCode');
-        this.copyCodeBtn = document.getElementById('copyCodeBtn');
 
         // File elements
         this.uploadBtn = document.getElementById('uploadBtn');
@@ -102,30 +78,11 @@ class SyncWave {
         // Share functionality
         this.shareRoomBtn.addEventListener('click', () => this.showShareModal());
         this.closeShareModal.addEventListener('click', () => this.hideShareModal());
+        this.copyCodeBtn.addEventListener('click', () => this.copyShareCode());
         this.copyLinkBtn.addEventListener('click', () => this.copyShareLink());
         this.shareModal.addEventListener('click', (e) => {
             if (e.target === this.shareModal) this.hideShareModal();
         });
-        
-        // File selection modal
-        this.closeFileSelectionModal.addEventListener('click', () => this.hideFileSelectionModal());
-        this.fileSelectionModal.addEventListener('click', (e) => {
-            if (e.target === this.fileSelectionModal) this.hideFileSelectionModal();
-        });
-        
-        // Sync selection modal
-        this.closeSyncSelectionModal.addEventListener('click', () => this.hideSyncSelectionModal());
-        this.syncSelectionModal.addEventListener('click', (e) => {
-            if (e.target === this.syncSelectionModal) this.hideSyncSelectionModal();
-        });
-        this.startSyncBtn.addEventListener('click', () => this.startSync());
-        
-        // Share modal
-        this.copyCodeBtn.addEventListener('click', () => this.copyShareCode());
-        
-        // Sync selection button
-        this.selectSyncBtn = document.getElementById('selectSyncBtn');
-        this.selectSyncBtn.addEventListener('click', () => this.showSyncSelectionModal());
 
         // File upload
         this.uploadBtn.addEventListener('click', () => this.fileInput.click());
@@ -160,10 +117,6 @@ class SyncWave {
         // Fullscreen button
         this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
         
-        // Sync offset controls
-        this.syncOffsetMinus.addEventListener('click', () => this.adjustSyncOffset(-0.5));
-        this.syncOffsetPlus.addEventListener('click', () => this.adjustSyncOffset(0.5));
-        
         // Video element events
         this.videoElement.addEventListener('loadedmetadata', () => this.updateVideoInfo());
         this.videoElement.addEventListener('timeupdate', () => this.updateProgress());
@@ -180,35 +133,31 @@ class SyncWave {
         let isDragging = false;
         let progressBarContainer = this.progressBar.parentElement;
         
+        // Create bound functions to ensure proper cleanup
+        const boundHandleProgressDrag = this.handleProgressDrag.bind(this);
+        const boundMouseMoveHandler = (e) => boundHandleProgressDrag(e, true);
+        
         const startDragging = (e) => {
-            if (this.isSyncing) return;
             isDragging = true;
-            this.handleProgressDrag(e, true);
+            this.handleProgressDrag(e, true); // Pass true to indicate dragging
+            document.addEventListener('mousemove', boundMouseMoveHandler);
+            document.addEventListener('mouseup', stopDragging);
             e.preventDefault();
         };
         
-        const handleMouseMove = (e) => {
-            if (!isDragging || this.isSyncing) return;
-            this.handleProgressDrag(e, true);
-        };
-        
-        const stopDragging = (e) => {
-            if (!isDragging) return;
+        const stopDragging = () => {
             isDragging = false;
-            // Send final seek command
-            this.handleProgressDrag(e, true);
+            document.removeEventListener('mousemove', boundMouseMoveHandler);
+            document.removeEventListener('mouseup', stopDragging);
         };
         
-        // Click to seek
-        progressBarContainer.addEventListener('click', (e) => {
-            if (this.isSyncing) return;
-            this.handleProgressDrag(e, false);
-        });
-        
-        // Drag to seek
+        // Click and drag events
         progressBarContainer.addEventListener('mousedown', startDragging);
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', stopDragging);
+        progressBarContainer.addEventListener('click', (e) => {
+            if (!isDragging) {
+                this.handleProgressDrag(e, false); // Pass false to indicate click
+            }
+        });
     }
     
     handleProgressDrag(event, isDragging = false) {
@@ -223,21 +172,14 @@ class SyncWave {
         this.progressHandle.style.left = `${percent * 100}%`;
         this.currentTime.textContent = this.formatTime(time);
         
-        // Show seeking popup when dragging
-        if (isDragging) {
-            this.showSeekingPopup(event, time);
-        } else {
-            this.hideSeekingPopup();
-        }
-        
-        // Only send seek command on click or when dragging ends
-        if (event.type === 'click' || (isDragging && event.type === 'mouseup')) {
+        // Only send seek command if we're actually dragging or clicking
+        // This prevents unnecessary seeks when just moving the mouse
+        if (isDragging || event.type === 'click') {
             this.socket.emit('playback-control', {
                 action: 'seek',
                 videoIndex: this.currentFileIndex,
                 time: time
             });
-            this.hideSeekingPopup();
         }
     }
     
@@ -277,87 +219,6 @@ class SyncWave {
             volumeHigh.style.display = 'block';
             volumeMuted.style.display = 'none';
         }
-    }
-    
-    adjustSyncOffset(amount) {
-        this.syncOffset += amount;
-        // Clamp sync offset between -5 and 5 seconds
-        this.syncOffset = Math.max(-5, Math.min(5, this.syncOffset));
-        this.updateSyncOffsetDisplay();
-        
-        // Apply the offset immediately
-        if (this.videoElement.duration) {
-            const currentTime = this.videoElement.currentTime;
-            const newTime = Math.max(0, Math.min(this.videoElement.duration, currentTime + amount));
-            this.videoElement.currentTime = newTime;
-        }
-    }
-    
-    updateSyncOffsetDisplay() {
-        this.syncOffsetDisplay.textContent = `${this.syncOffset >= 0 ? '+' : ''}${this.syncOffset.toFixed(1)}s`;
-    }
-    
-    showSeekingPopup(event, time) {
-        const rect = this.progressBar.parentElement.getBoundingClientRect();
-        const popup = this.seekingPopup;
-        const timeDisplay = this.seekingTime;
-        
-        // Position popup above the progress bar
-        const x = event.clientX - rect.left;
-        popup.style.left = `${x}px`;
-        popup.style.display = 'block';
-        popup.style.position = 'absolute';
-        popup.style.bottom = '100%';
-        popup.style.marginBottom = '8px';
-        popup.style.transform = 'translateX(-50%)';
-        popup.style.zIndex = '1000';
-        
-        // Update time display
-        timeDisplay.textContent = this.formatTime(time);
-        
-        // Create a simple preview placeholder
-        this.seekingPreview.innerHTML = `
-            <div style="width: 120px; height: 68px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px;">
-                ${this.formatTime(time)}
-            </div>
-        `;
-    }
-    
-    hideSeekingPopup() {
-        this.seekingPopup.style.display = 'none';
-    }
-    
-    showFileSelectionModal(availableFiles) {
-        this.fileSelectionOptions.innerHTML = '';
-        
-        availableFiles.forEach((file, index) => {
-            const option = document.createElement('div');
-            option.className = 'file-selection-option';
-            option.innerHTML = `
-                <div class="file-info">
-                    <div class="file-name">${file.name}</div>
-                    <div class="file-meta">${file.type} • ${file.size}</div>
-                </div>
-                <button class="btn btn-primary select-file-btn" data-index="${index}">Select</button>
-            `;
-            
-            option.querySelector('.select-file-btn').addEventListener('click', () => {
-                this.selectFileFromModal(index);
-            });
-            
-            this.fileSelectionOptions.appendChild(option);
-        });
-        
-        this.fileSelectionModal.style.display = 'flex';
-    }
-    
-    hideFileSelectionModal() {
-        this.fileSelectionModal.style.display = 'none';
-    }
-    
-    selectFileFromModal(index) {
-        this.hideFileSelectionModal();
-        this.selectFile(index);
     }
     
     setupControlsAutoHide() {
@@ -455,8 +316,20 @@ class SyncWave {
             this.updateTorrentFile(data.fileIndex, data.torrentData, data.torrentFileName);
         });
         
-        this.socket.on('sync-started', (data) => {
-            this.updateStatus('Sync started! All clients will sync to selected files.');
+        this.socket.on('play-permission-granted', () => {
+            console.log('Play permission granted - enabling play button');
+            this.enablePlayButton();
+            const action = this.isPlaying ? 'pause' : 'play';
+            this.socket.emit('playback-control', {
+                action: action,
+                videoIndex: this.currentFileIndex,
+                time: this.videoElement.currentTime
+            });
+        });
+        
+        this.socket.on('play-permission-denied', () => {
+            console.log('Play permission denied - waiting for all clients to select files');
+            this.updateStatus('Waiting for everyone to select a file');
         });
     }
 
@@ -502,6 +375,7 @@ class SyncWave {
         this.playerSection.style.display = 'flex';
         this.shareRoomBtn.style.display = 'block';
         this.roomInfo.style.display = 'flex';
+        this.uploadBtn.style.display = 'block';
         
         if (this.isHost) {
             this.hostIndicator.style.display = 'inline-block';
@@ -575,6 +449,7 @@ class SyncWave {
         const cardsHTML = this.files.map((file, index) => {
             const isAvailable = this.localFiles.has(file.fileName);
             const isActive = index === this.currentFileIndex;
+            const isSelected = this.selectedFileIndex === index;
             
             const avatarsHTML = file.availableFor.map(memberId => {
                 const isYou = memberId === this.socket.id;
@@ -583,10 +458,10 @@ class SyncWave {
             }).join('');
 
             return `
-                <div class="file-card ${isActive ? 'active' : ''} ${!isAvailable ? 'missing' : ''}" data-index="${index}">
+                <div class="file-card ${isActive ? 'active' : ''} ${!isAvailable ? 'missing' : ''} ${isSelected ? 'selected' : ''}" data-index="${index}">
                     <div class="file-card-header">
                         <div class="file-info">
-                            <div class="file-name">${file.name} ${!isAvailable ? '(Not on your device)' : ''}</div>
+                            <div class="file-name">${file.name} ${!isAvailable ? '(Not on your device)' : ''} ${isSelected ? '✓ SELECTED' : ''}</div>
                             <div class="file-meta">
                                 <span>${file.type}</span>
                                 <span>${file.size}</span>
@@ -599,69 +474,98 @@ class SyncWave {
                         <div class="user-avatars">
                             ${avatarsHTML}
                         </div>
-                        ${!isAvailable ? '<div class="select-hint">Click to select - others will sync with you</div>' : ''}
+                        ${!isAvailable ? '<div class="select-hint">Upload this file to select it</div>' : '<div class="select-hint">Click to select this file</div>'}
                     </div>
-                        <div class="file-download-info">
-                            <div class="download-source">
-                                <label>Download Source:</label>
-                                <textarea class="download-source-input" placeholder="Where did you download this file? (e.g., YouTube, Netflix, etc.)" data-file-index="${index}" rows="2"></textarea>
-                            </div>
-                            <div class="torrent-upload">
-                                <label>Torrent File:</label>
-                                <input type="file" class="torrent-file-input" accept=".torrent" data-file-index="${index}">
-                                <button class="upload-torrent-btn" data-file-index="${index}">Upload Torrent</button>
+                    
+                    <!-- Download source section -->
+                    <div class="file-download-info">
+                        <div class="download-source">
+                            <label>Download Source:</label>
+                            <textarea class="download-source-input" placeholder="Paste download links, sources, or instructions here..." data-file-index="${index}"></textarea>
+                        </div>
+                        
+                        <!-- Torrent upload section -->
+                        <div class="torrent-upload">
+                            <label>Upload Torrent File:</label>
+                            <div class="torrent-upload-controls">
+                                <input type="file" class="torrent-file-input" accept=".torrent" data-file-index="${index}" style="display: none;">
+                                <button class="upload-torrent-btn" data-file-index="${index}">Choose Torrent File</button>
+                                <div class="torrent-download" data-file-index="${index}"></div>
                             </div>
                         </div>
+                    </div>
                 </div>
             `;
         }).join('');
 
         this.fileCards.innerHTML = cardsHTML;
         this.fileCount.textContent = `${this.files.length} file${this.files.length !== 1 ? 's' : ''}`;
-        
-        // Show sync button if there are files available
-        const hasAvailableFiles = this.files.some(file => this.localFiles.has(file.fileName));
-        this.selectSyncBtn.style.display = hasAvailableFiles ? 'flex' : 'none';
 
         // Add click listeners
         this.fileCards.querySelectorAll('.file-card').forEach(card => {
             card.addEventListener('click', (e) => {
+                console.log('File card clicked:', e.target.tagName, e.target);
+                
                 // Don't trigger if clicking on input fields or buttons
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'LABEL') {
+                    console.log('Click ignored - input/button/textarea/label');
+                    return;
+                }
                 
                 const index = parseInt(card.dataset.index);
-                // Allow selection regardless of local availability
-                // Each client will play what they have
+                const file = this.files[index];
+                const isAvailable = this.localFiles.has(file.fileName);
+                
+                // Only allow selection of locally available files
+                if (!isAvailable) {
+                    this.updateStatus('File not available locally. Upload the file first.');
+                    return;
+                }
+                
+                console.log('Selecting file index:', index);
                 this.selectFile(index);
             });
         });
-        
-        // Add event listeners for download info and torrent upload
+
+        // Add event listeners for download source and torrent upload
         this.fileCards.querySelectorAll('.download-source-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const fileIndex = parseInt(e.target.dataset.fileIndex);
-                const source = e.target.value;
-                console.log(`Download source for file ${fileIndex}: ${source}`);
+                const downloadSource = e.target.value;
+                console.log('Download source updated for file', fileIndex, ':', downloadSource);
                 
-                // Send download source to server to share with other clients
+                // Broadcast to server
                 this.socket.emit('update-download-source', {
                     fileIndex: fileIndex,
-                    downloadSource: source
+                    downloadSource: downloadSource
                 });
             });
         });
-        
+
+        this.fileCards.querySelectorAll('.upload-torrent-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fileIndex = parseInt(e.target.dataset.fileIndex);
+                const torrentInput = this.fileCards.querySelector(`.torrent-file-input[data-file-index="${fileIndex}"]`);
+                torrentInput.click();
+            });
+        });
+
         this.fileCards.querySelectorAll('.torrent-file-input').forEach(input => {
             input.addEventListener('change', (e) => {
                 const fileIndex = parseInt(e.target.dataset.fileIndex);
                 const file = e.target.files[0];
+                
                 if (file) {
-                    console.log(`Torrent file uploaded for file ${fileIndex}:`, file.name);
+                    console.log('Torrent file selected for file', fileIndex, ':', file.name);
                     
-                    // Read the torrent file and send to server
+                    // Convert to base64 for transmission
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const torrentData = event.target.result;
+                        console.log('Emitting torrent upload for file', fileIndex);
+                        
+                        // Broadcast to server
                         this.socket.emit('upload-torrent', {
                             fileIndex: fileIndex,
                             torrentData: torrentData,
@@ -672,47 +576,50 @@ class SyncWave {
                 }
             });
         });
-        
-        this.fileCards.querySelectorAll('.upload-torrent-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const fileIndex = parseInt(e.target.dataset.fileIndex);
-                const torrentInput = document.querySelector(`.torrent-file-input[data-file-index="${fileIndex}"]`);
-                torrentInput.click();
-            });
-        });
     }
 
     selectFile(index) {
         if (index < 0 || index >= this.files.length) return;
         
         const file = this.files[index];
-        console.log('Selecting file:', file.name);
+        const isLocallyAvailable = this.localFiles.has(file.fileName);
         
-        // Send playback control to server (don't check if file exists locally)
-        // Let each client try to play whatever they have
-        this.socket.emit('playback-control', {
-            action: 'load-video',
-            videoIndex: index,
-            videoName: file.name,
-            fileName: file.fileName,
-            time: 0
+        console.log('Selecting file:', file.name, 'Locally available:', isLocallyAvailable);
+        
+        // Set as selected file
+        this.selectedFileIndex = index;
+        this.currentFileIndex = index;
+        this.updateFileCards();
+        
+        this.updateStatus(`Selected: ${file.name}`);
+        
+        // Load the video immediately since we only allow locally available files
+        if (isLocallyAvailable) {
+            console.log('Loading local video:', file.name);
+            this.loadLocalVideo(index);
+        }
+        
+        // Notify server about file selection
+        console.log('Emitting file-selected to server:', { fileIndex: index, fileName: file.name });
+        this.socket.emit('file-selected', {
+            fileIndex: index,
+            fileName: file.name
         });
     }
 
     togglePlayPause() {
-        if (this.currentFileIndex === -1 || this.files.length === 0) {
-            this.showError('No file selected');
+        if (this.selectedFileIndex === -1) {
+            this.updateStatus('Please select a file first');
+            return;
+        }
+        
+        if (this.files.length === 0) {
+            this.updateStatus('No files available');
             return;
         }
 
-        const action = this.isPlaying ? 'pause' : 'play';
-        
-        this.socket.emit('playback-control', {
-            action: action,
-            videoIndex: this.currentFileIndex,
-            time: this.videoElement.currentTime
-        });
+        // Check if all clients have selected files before allowing play/pause
+        this.socket.emit('check-play-permission');
     }
 
 
@@ -757,9 +664,7 @@ class SyncWave {
             this.loadLocalVideo(data.videoIndex);
         }
         
-        // Apply sync offset
-        const adjustedTime = Math.max(0, (data.time || 0) + this.syncOffset);
-        this.videoElement.currentTime = adjustedTime;
+        this.videoElement.currentTime = data.time || 0;
         this.videoElement.play().catch(e => console.warn('Play failed:', e));
         this.isPlaying = true;
         this.updatePlayPauseButton();
@@ -770,9 +675,7 @@ class SyncWave {
             this.loadLocalVideo(data.videoIndex);
         }
         
-        // Apply sync offset
-        const adjustedTime = Math.max(0, (data.time || 0) + this.syncOffset);
-        this.videoElement.currentTime = adjustedTime;
+        this.videoElement.currentTime = data.time || 0;
         this.videoElement.pause();
         this.isPlaying = false;
         this.updatePlayPauseButton();
@@ -783,9 +686,7 @@ class SyncWave {
             this.loadLocalVideo(data.videoIndex);
         }
         
-        // Apply sync offset
-        const adjustedTime = Math.max(0, data.time + this.syncOffset);
-        this.videoElement.currentTime = adjustedTime;
+        this.videoElement.currentTime = data.time;
     }
 
     syncLoadVideo(data) {
@@ -811,19 +712,18 @@ class SyncWave {
             }
         }
         
-        // Always update the current file index and video info to show the selected file
-        this.currentFileIndex = index;
-        this.updateVideoInfo(file);
-        this.updateFileCards();
-        
         if (!videoUrl) {
             console.warn(`No local video files available`);
             this.showVideoOverlay();
             return;
         }
         
+        this.currentFileIndex = index;
         this.videoElement.src = videoUrl;
         this.videoElement.load();
+        
+        this.updateVideoInfo(file);
+        this.updateFileCards();
         this.hideVideoOverlay();
     }
 
@@ -915,13 +815,31 @@ class SyncWave {
 
     showShareModal() {
         const shareUrl = `${window.location.origin}/room/${this.currentRoom}`;
-        this.shareLink.value = shareUrl;
         this.shareCode.value = this.currentRoom;
+        this.shareLink.value = shareUrl;
         this.shareModal.style.display = 'flex';
     }
 
     hideShareModal() {
         this.shareModal.style.display = 'none';
+    }
+
+    async copyShareCode() {
+        try {
+            await navigator.clipboard.writeText(this.shareCode.value);
+            this.copyCodeBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                this.copyCodeBtn.textContent = 'Copy Code';
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy code:', err);
+            this.shareCode.select();
+            document.execCommand('copy');
+            this.copyCodeBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                this.copyCodeBtn.textContent = 'Copy Code';
+            }, 2000);
+        }
     }
 
     async copyShareLink() {
@@ -941,105 +859,50 @@ class SyncWave {
             }, 2000);
         }
     }
-    
-    async copyShareCode() {
-        try {
-            await navigator.clipboard.writeText(this.shareCode.value);
-            this.copyCodeBtn.textContent = 'Copied!';
-            setTimeout(() => {
-                this.copyCodeBtn.textContent = 'Copy Code';
-            }, 2000);
-        } catch (err) {
-            console.error('Failed to copy code:', err);
-            this.shareCode.select();
-            document.execCommand('copy');
-            this.copyCodeBtn.textContent = 'Copied!';
-            setTimeout(() => {
-                this.copyCodeBtn.textContent = 'Copy Code';
-            }, 2000);
-        }
-    }
-    
-    showSyncSelectionModal() {
-        this.syncFileOptions.innerHTML = '';
-        this.selectedFiles = [];
+
+    enablePlayButton() {
+        console.log('Enabling play button - making it glow green');
+        console.log('Play button element:', this.playPauseBtn);
         
-        // Show only files that are available locally
-        const availableFiles = this.files.filter((file, index) => this.localFiles.has(file.fileName));
+        // Make play button glow green
+        this.playPauseBtn.style.boxShadow = '0 0 20px rgba(76, 175, 80, 0.8)';
+        this.playPauseBtn.style.borderColor = '#4CAF50';
+        this.playPauseBtn.style.background = 'rgba(76, 175, 80, 0.2)';
         
-        availableFiles.forEach((file, index) => {
-            const option = document.createElement('div');
-            option.className = 'sync-file-option';
-            option.innerHTML = `
-                <label class="sync-file-checkbox">
-                    <input type="checkbox" class="file-checkbox" data-file-index="${index}">
-                    <div class="file-info">
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-meta">${file.type} • ${file.size}</div>
-                    </div>
-                </label>
-            `;
-            
-            option.querySelector('.file-checkbox').addEventListener('change', (e) => {
-                this.updateSelectedFiles();
-            });
-            
-            this.syncFileOptions.appendChild(option);
+        console.log('Play button styles applied:', {
+            boxShadow: this.playPauseBtn.style.boxShadow,
+            borderColor: this.playPauseBtn.style.borderColor,
+            background: this.playPauseBtn.style.background
         });
         
-        this.syncSelectionModal.style.display = 'flex';
+        // Reset after 3 seconds
+        setTimeout(() => {
+            this.playPauseBtn.style.boxShadow = '';
+            this.playPauseBtn.style.borderColor = '';
+            this.playPauseBtn.style.background = '';
+        }, 3000);
     }
-    
-    hideSyncSelectionModal() {
-        this.syncSelectionModal.style.display = 'none';
-    }
-    
-    updateSelectedFiles() {
-        const checkboxes = this.syncFileOptions.querySelectorAll('.file-checkbox');
-        this.selectedFiles = [];
-        
-        checkboxes.forEach(checkbox => {
-            if (checkbox.checked) {
-                this.selectedFiles.push(parseInt(checkbox.dataset.fileIndex));
-            }
-        });
-        
-        this.startSyncBtn.disabled = this.selectedFiles.length === 0;
-        this.syncStatus.textContent = this.selectedFiles.length > 0 
-            ? `Selected ${this.selectedFiles.length} file(s) - Ready to sync!`
-            : 'Select files to start syncing';
-    }
-    
-    startSync() {
-        if (this.selectedFiles.length === 0) return;
-        
-        // Send sync request to server
-        this.socket.emit('start-sync', {
-            selectedFiles: this.selectedFiles
-        });
-        
-        this.hideSyncSelectionModal();
-        this.updateStatus('Sync started! All clients will sync to selected files.');
-    }
-    
+
     updateDownloadSource(fileIndex, downloadSource) {
-        const input = this.fileCards.querySelector(`[data-file-index="${fileIndex}"]`);
+        const input = this.fileCards.querySelector(`.download-source-input[data-file-index="${fileIndex}"]`);
         if (input) {
             input.value = downloadSource;
         }
     }
-    
+
     updateTorrentFile(fileIndex, torrentData, torrentFileName) {
         // Update the torrent file display for other clients
-        const fileCard = this.fileCards.querySelector(`[data-index="${fileIndex}"]`);
-        if (fileCard) {
-            let torrentSection = fileCard.querySelector('.torrent-download');
-            if (!torrentSection) {
-                torrentSection = document.createElement('div');
-                torrentSection.className = 'torrent-download';
-                fileCard.querySelector('.torrent-upload').appendChild(torrentSection);
-            }
-            torrentSection.innerHTML = `<a href="${torrentData}" download="${torrentFileName}">Download Torrent</a>`;
+        const torrentDownload = this.fileCards.querySelector(`.torrent-download[data-file-index="${fileIndex}"]`);
+        if (torrentDownload) {
+            // Create a proper download link
+            const link = document.createElement('a');
+            link.href = torrentData;
+            link.download = torrentFileName;
+            link.textContent = `Download ${torrentFileName}`;
+            link.className = 'torrent-download-link';
+            
+            torrentDownload.innerHTML = '';
+            torrentDownload.appendChild(link);
         }
     }
 

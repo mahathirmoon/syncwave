@@ -906,265 +906,63 @@ body {
     margin-bottom: 24px;
 }
 
-/* Sync offset control */
-.sync-offset-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 4px 8px;
+/* Selected file card styles */
+.file-card.selected {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
 }
 
-.sync-offset-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 4px;
-    padding: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.sync-offset-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
-}
-
-.sync-offset-display {
-    font-size: 12px;
-    font-weight: 500;
-    color: #ffffff;
-    min-width: 32px;
-    text-align: center;
-}
-
-/* Control layout improvements */
-.control-buttons {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-}
-
-.left-controls {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.playback-controls {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    justify-content: center;
-    flex: 1;
-}
-
-.right-controls {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-/* Volume control improvements */
-.volume-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    position: relative;
-}
-
-.volume-slider-container {
-    opacity: 1;
-    visibility: visible;
-    transition: all 0.2s ease;
-    position: relative;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 8px;
-    border-radius: 4px;
-    transform: none;
-    transform-origin: unset;
-}
-
-.volume-slider {
-    width: 80px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-/* Seeking popup */
-.seeking-popup {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    background: rgba(0, 0, 0, 0.9);
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-bottom: 8px;
-    transform: translateX(-50%);
-    z-index: 1000;
-    min-width: 80px;
-    text-align: center;
-}
-
-.seeking-time {
-    font-size: 14px;
+.file-card.selected .file-name {
+    color: #4CAF50;
     font-weight: 600;
-    color: #ffffff;
-    margin-bottom: 4px;
 }
 
-.seeking-preview {
-    width: 120px;
-    height: 68px;
-    background: #333;
-    border-radius: 4px;
-    overflow: hidden;
+/* Hover effects for selectable files */
+.file-card:not(.missing):hover {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
 }
 
-.seeking-preview canvas {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+.file-card:not(.missing):hover .file-name {
+    color: #4CAF50;
 }
 
-/* File selection modal */
-.file-selection-option {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    transition: all 0.2s ease;
-}
-
-.file-selection-option:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.file-selection-option .file-info {
-    flex: 1;
-}
-
-.file-selection-option .file-name {
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.file-selection-option .file-meta {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
-}
-
-/* File download info */
-.file-download-info {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.download-source, .torrent-upload {
-    margin-bottom: 8px;
-}
-
-.download-source label, .torrent-upload label {
-    display: block;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
-    margin-bottom: 4px;
-}
-
-.download-source-input {
-    width: 100%;
-    padding: 6px 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: #ffffff;
-    font-size: 12px;
-}
-
-.download-source-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-}
-
-.torrent-upload {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.torrent-file-input {
-    display: none;
-}
-
-.upload-torrent-btn {
-    padding: 4px 8px;
-    background: rgba(255, 107, 53, 0.2);
-    border: 1px solid rgba(255, 107, 53, 0.5);
-    border-radius: 4px;
-    color: #ff6b35;
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.upload-torrent-btn:hover {
-    background: rgba(255, 107, 53, 0.3);
-    border-color: rgba(255, 107, 53, 0.7);
-}
-
-/* Enhanced download source input */
-.download-source-input {
-    width: 100%;
-    padding: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: #fff;
-    font-size: 12px;
-    resize: vertical;
-    min-height: 40px;
-    font-family: inherit;
-}
-
-.download-source-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+.file-card:not(.missing):hover .file-icon {
+    transform: scale(1.1);
+    transition: transform 0.3s ease;
 }
 
 /* Share modal styles */
 .share-options {
     display: flex;
-    flex-direction: column;
     gap: 20px;
     margin: 20px 0;
+    flex-wrap: wrap;
 }
 
 .share-option {
-    padding: 16px;
+    flex: 1;
+    min-width: 280px;
+    padding: 20px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
 }
 
 .share-option h4 {
     margin: 0 0 8px 0;
-    color: #fff;
+    color: #ff6b35;
     font-size: 16px;
+    font-weight: 600;
 }
 
 .share-option p {
-    margin: 0 0 12px 0;
+    margin: 0 0 16px 0;
     color: rgba(255, 255, 255, 0.7);
     font-size: 14px;
 }
@@ -1176,103 +974,196 @@ body {
     align-items: center;
 }
 
-.share-code {
+.share-code,
+.share-link {
     flex: 1;
-    padding: 8px 12px;
+    padding: 12px 16px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: #fff;
-    font-size: 16px;
+    border-radius: 6px;
+    color: white;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
     font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.share-code {
     text-align: center;
+    font-size: 18px;
     letter-spacing: 2px;
 }
 
 .share-instructions {
-    margin-top: 20px;
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.05);
+    margin-top: 24px;
+    padding: 20px;
+    background: rgba(255, 107, 53, 0.1);
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 107, 53, 0.2);
 }
 
 .share-instructions h4 {
     margin: 0 0 12px 0;
-    color: #fff;
-    font-size: 14px;
+    color: #ff6b35;
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .share-instructions ul {
     margin: 0;
     padding-left: 20px;
     color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
-    line-height: 1.5;
 }
 
 .share-instructions li {
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    line-height: 1.5;
 }
 
-/* Sync selection modal styles */
-.sync-file-options {
-    max-height: 300px;
-    overflow-y: auto;
-    margin-bottom: 20px;
+.share-instructions strong {
+    color: #ff6b35;
+    font-weight: 600;
 }
 
-.sync-file-option {
-    margin-bottom: 12px;
+/* Responsive design for share modal */
+@media (max-width: 768px) {
+    .share-options {
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .share-option {
+        min-width: auto;
+        width: 100%;
+    }
 }
 
-.sync-file-checkbox {
-    display: flex;
-    align-items: center;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
+/* File download info styles */
+.file-download-info {
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-    transition: all 0.2s ease;
 }
 
-.sync-file-checkbox:hover {
+.download-source,
+.torrent-upload {
+    margin-bottom: 16px;
+}
+
+.download-source:last-child,
+.torrent-upload:last-child {
+    margin-bottom: 0;
+}
+
+.download-source label,
+.torrent-upload label {
+    display: block;
+    margin-bottom: 8px;
+    color: #ff6b35;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.download-source-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 12px;
     background: rgba(255, 255, 255, 0.1);
-}
-
-.sync-file-checkbox input[type="checkbox"] {
-    margin-right: 12px;
-    width: 16px;
-    height: 16px;
-    accent-color: #6366f1;
-}
-
-.file-info {
-    flex: 1;
-}
-
-.file-name {
-    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: white;
     font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 4px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
 }
 
-.file-meta {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 12px;
+.download-source-input:focus {
+    outline: none;
+    border-color: #ff6b35;
+    background: rgba(255, 255, 255, 0.15);
 }
 
-.sync-actions {
+.download-source-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.torrent-upload-controls {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-direction: column;
+    gap: 8px;
 }
 
-.sync-status {
-    color: rgba(255, 255, 255, 0.7);
+.upload-torrent-btn {
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border: 1px solid #2E7D32;
+    border-radius: 6px;
+    color: white;
     font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    align-self: flex-start;
+}
+
+.upload-torrent-btn:hover {
+    background: linear-gradient(135deg, #45a049, #3d8b40);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.torrent-download {
+    margin-top: 8px;
+}
+
+.torrent-download-link {
+    display: inline-block;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border: 1px solid #1565C0;
+    border-radius: 6px;
+    color: white;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.torrent-download-link:hover {
+    background: linear-gradient(135deg, #1976D2, #1565C0);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+/* Ensure download info is not blurred for missing files */
+.file-card.missing .file-download-info {
+    opacity: 1;
+    filter: none;
+}
+
+.file-card.missing .download-source-input {
+    opacity: 1;
+    filter: none;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.file-card.missing .torrent-upload {
+    opacity: 1;
+    filter: none;
+}
+
+.file-card.missing .torrent-file-input {
+    opacity: 1;
+    filter: none;
+}
+
+.file-card.missing .upload-torrent-btn {
+    opacity: 1;
+    filter: none;
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border: 1px solid #2E7D32;
 }

@@ -148,6 +148,81 @@ io.on('connection', (socket) => {
     });
   });
 
+  // File selection handler
+  socket.on('file-selected', (data) => {
+    if (!socket.roomId) return;
+
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+
+    console.log(`File selected by ${socket.id}:`, data);
+
+    // Store the selected file for this client
+    const member = room.members.get(socket.id);
+    if (member) {
+      member.selectedFileIndex = data.fileIndex;
+      member.selectedFileName = data.fileName;
+      console.log(`Updated member ${socket.id} with selected file: ${data.fileName}`);
+    }
+  });
+
+  // Check play permission handler
+  socket.on('check-play-permission', () => {
+    if (!socket.roomId) return;
+
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+
+    // Check if all clients have selected files
+    const allMembers = Array.from(room.members.values());
+    const allSelected = allMembers.every(member => member.selectedFileIndex !== undefined);
+    
+    console.log(`Play permission check: ${allMembers.length} members, all selected: ${allSelected}`);
+    
+    if (allSelected && allMembers.length >= 1) {
+      // All clients have selected files, grant permission
+      console.log('Granting play permission to all clients');
+      io.to(socket.roomId).emit('play-permission-granted');
+    } else {
+      // Not all clients have selected files, deny permission
+      console.log('Denying play permission - not all clients have selected files');
+      socket.emit('play-permission-denied');
+    }
+  });
+
+  // Download source update handler
+  socket.on('update-download-source', (data) => {
+    if (!socket.roomId) return;
+
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+
+    console.log(`Download source updated for file ${data.fileIndex}:`, data.downloadSource);
+    
+    // Broadcast to all clients in the room
+    io.to(socket.roomId).emit('download-source-updated', {
+      fileIndex: data.fileIndex,
+      downloadSource: data.downloadSource
+    });
+  });
+
+  // Torrent upload handler
+  socket.on('upload-torrent', (data) => {
+    if (!socket.roomId) return;
+
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+
+    console.log(`Torrent file uploaded for file ${data.fileIndex}:`, data.torrentFileName);
+    
+    // Broadcast to all clients in the room
+    io.to(socket.roomId).emit('torrent-uploaded', {
+      fileIndex: data.fileIndex,
+      torrentData: data.torrentData,
+      torrentFileName: data.torrentFileName
+    });
+  });
+
   // Playback control - server authoritative with sync delay
   socket.on('playback-control', (data) => {
     if (!socket.roomId) return;
@@ -243,59 +318,6 @@ io.on('connection', (socket) => {
       time: room.getCurrentTime(),
       isPlaying: room.isPlaying,
       timestamp: Date.now()
-    });
-  });
-
-  // Handle download source updates
-  socket.on('update-download-source', (data) => {
-    if (!socket.roomId) return;
-
-    const room = rooms.get(socket.roomId);
-    if (!room) return;
-
-    const file = room.playlist[data.fileIndex];
-    if (file) {
-      file.downloadSource = data.downloadSource;
-      
-      // Broadcast to all clients in the room
-      io.to(socket.roomId).emit('download-source-updated', {
-        fileIndex: data.fileIndex,
-        downloadSource: data.downloadSource
-      });
-    }
-  });
-
-  // Handle torrent file uploads
-  socket.on('upload-torrent', (data) => {
-    if (!socket.roomId) return;
-
-    const room = rooms.get(socket.roomId);
-    if (!room) return;
-
-    const file = room.playlist[data.fileIndex];
-    if (file) {
-      file.torrentFile = data.torrentData;
-      file.torrentFileName = data.torrentFileName;
-      
-      // Broadcast to all clients in the room
-      io.to(socket.roomId).emit('torrent-uploaded', {
-        fileIndex: data.fileIndex,
-        torrentData: data.torrentData,
-        torrentFileName: data.torrentFileName
-      });
-    }
-  });
-
-  // Handle sync file selection
-  socket.on('start-sync', (data) => {
-    if (!socket.roomId) return;
-
-    const room = rooms.get(socket.roomId);
-    if (!room) return;
-
-    // Broadcast sync started to all clients
-    io.to(socket.roomId).emit('sync-started', {
-      selectedFiles: data.selectedFiles
     });
   });
 
