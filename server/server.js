@@ -367,12 +367,7 @@ app.get('/api/rooms', (req, res) => {
   res.json(roomList);
 });
 
-if (process.env.NODE_ENV !== 'production') {
-  server.listen(PORT, () => {
-    console.log(`🎵 SyncWave server running on port ${PORT}`);
-    console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
-  });
-}
-
-// Export for Vercel
-module.exports = app;
+server.listen(PORT, () => {
+  console.log(`🎵 SyncWave server running on port ${PORT}`);
+  console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
+});
