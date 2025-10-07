@@ -1,6 +1,6 @@
-# 🎵 SyncWave
+#  SyncWave
 
-**Real-time Music Synchronizer for Local Files**
+**Real-time Synchronizer for Local Files**
 
 SyncWave is a modern, real-time media synchronization application that allows multiple users to listen to music together in perfect sync, just like Spotify Jam but for your own music collection. Built with JavaScript, Socket.IO, and a beautiful Spotify-inspired dark UI.
 
