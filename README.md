@@ -2,17 +2,13 @@
 
 **Real-time Synchronizer for Local Files**
 
-SyncWave is a modern, real-time media synchronization application that allows multiple users to watch videos together in perfect sync, just like Spotify Jam but for your own movies collection. Built with JavaScript, Socket.IO.
-no more mama pause kor astesi.
-
-try it out: https://syncwave-production.up.railway.app/
-
+SyncWave is a modern, real-time media synchronization application that allows multiple users to listen to music together in perfect sync, just like Spotify Jam but for your own music collection. Built with JavaScript, Socket.IO, and a beautiful Spotify-inspired dark UI.
 
 ![SyncWave Preview](https://via.placeholder.com/800x400/1db954/000000?text=SyncWave)
 
 ## ✨ Features
 
-###  Real-Time Synchronization
+### 🎧 Real-Time Synchronization
 - **Server-Authoritative Sync**: Ensures perfect synchronization across all connected devices
 - **Host-Controlled Playback**: Room host controls play, pause, seek, and track changes
 - **Automatic Sync Recovery**: Automatically syncs new members with current playback state
@@ -58,7 +54,12 @@ try it out: https://syncwave-production.up.railway.app/
 4. **Start the server**:
    ```bash
    npm start
-   ```
+   ```
+
+5. **Open your browser** and go to:
+   ```
+   http://localhost:3000
+   ```
 
 ### Development Mode
 
