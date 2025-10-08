@@ -414,12 +414,10 @@ app.get('/api/rooms', (req, res) => {
 });
 
 // For local development
-if (process.env.NODE_ENV !== 'production') {
-  server.listen(PORT, () => {
-    console.log(`🎵 SyncWave server running on port ${PORT}`);
-    console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
-  });
-}
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`🎵 SyncWave server running on port ${PORT}`);
+  console.log(`🌐 Open http://localhost:${PORT} to start syncing!`);
+});
 
-// Export for Vercel
 module.exports = app;
